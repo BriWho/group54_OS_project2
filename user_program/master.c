@@ -23,14 +23,20 @@ int main (int argc, char* argv[])
 	int i, dev_fd, file_fd;// the fd for the device and the fd for the input file
 	size_t ret, file_size, tmp;
 	char file_name[50], method[20];
+	char c[3];
 	char *kernel_address = NULL, *file_address = NULL;
 	struct timeval start;
 	struct timeval end;
 	double trans_time; //calulate the time between the device is opened and it is closed
-
-
-	strcpy(file_name, argv[1]);
-	strcpy(method, argv[2]);
+	double n_time = 0;
+	int n_file;
+	char dir[50];
+	size_t nfile_size = 0;
+	
+	strcpy(c,argv[1]);
+	n_file = atoi(c);
+	strcpy(dir, argv[2]);
+	strcpy(method, argv[3]);
 
 
 	if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
@@ -39,17 +45,7 @@ int main (int argc, char* argv[])
 		return 1;
  	}
 	gettimeofday(&start ,NULL);
-	if( (file_fd = open (file_name, O_RDWR)) < 0 )
-	{
-		perror("failed to open input file\n");
-		return 1;
-	}
 
-	if( (file_size = get_filesize(file_name)) < 0)
-	{
-		perror("failed to get filesize\n");
-		return 1;
-	}
 
 
 	if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
@@ -57,67 +53,66 @@ int main (int argc, char* argv[])
 		perror("ioclt server create socket error\n");
 		return 1;
 	}
-    
-	size_t offset = 0;
-	switch(method[0]) 
-	{
-		case 'f': //fcntl : read()/write()
-			do
-			{
-				ret = read(file_fd, buf, sizeof(buf)); // read from the input file
-				for(i = 0 ; i < 1 * ret ; i++)
-					printf("%c" , buf[i]);
-				write(dev_fd, buf, ret);//write to the the device
-			}while(ret > 0);
-			break;
-        	case 'm': //mmap
-			do{
-				file_addr = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, file_fd, offset);
+    	for(int i = 0;i < n_file;i++){
+		char nfile_name[50];
+		sprintf(nfile_name,"%s/target_file_%d", dir, i+1);
+		if( (file_fd = open(nfile_name, O_RDWR)) < 0 )
+		{
+			perror("failed to open input file\n");
+			return 1;
+		}
 
-				if(file_addr == (void*)-1){
-					perror("file_addr");
-					return 1;
-				}
-							
-				dev_addr = mmap(NULL, PAGE_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, offset);
-
-				if(dev_addr == (void*)-1){
-					perror("dev_addr");
-					return 1;
-				}
-
-				size_t t = 0;
-				do {	
-					size_t length = BUF_SIZE;
-					if(BUF_SIZE + offset > file_size)
-						length = file_size%BUF_SIZE;
-					memcpy(dev_addr, file_addr + t, length);
-					ioctl(dev_fd, 0x12345678, length);
-					offset += length;
-					t += length;
-				} while(offset % PAGE_SIZE != 0 && offset < file_size);
+		if( (file_size = get_filesize(nfile_name)) < 0)
+		{
+			perror("failed to get filesize\n");
+			return 1;
+		}
+		//printf("%d\n",file_size);
+		size_t offset = 0;
+		switch(method[0]) 
+		{
+			case 'f': //fcntl : read()/write()
+				do
+				{
+					ret = read(file_fd, buf, sizeof(buf)); // read from the input file
+					//for(i = 0 ; i < 1 * ret ; i++)
+						//printf("%c" , buf[i]);
+					write(dev_fd, buf, ret);//write to the the device
+				}while(ret > 0);
+				break;
+        		case 'm':
+				do{
+					file_addr = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, file_fd, offset);					   
+					dev_addr = mmap(NULL, PAGE_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, offset);
+					size_t t = 0;
+					do {	
+						size_t length = BUF_SIZE;
+						if(BUF_SIZE + offset > file_size)
+							length = file_size%BUF_SIZE;
+						memcpy(dev_addr, file_addr + t, length);
+						ioctl(dev_fd, 0x12345678, length);
+						offset += length;
+						t += length;
+					   }while(offset % PAGE_SIZE != 0 && offset < file_size);
 
 				ioctl(dev_fd , 0 , file_addr);
 				munmap(file_addr, PAGE_SIZE);
 			} while (offset < file_size);
 
-		break;
-	}
+			break;
+		}
 
-
-	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
-	{
-		perror("ioclt server exits error\n");
-		return 1;
-	}
-	gettimeofday(&end, NULL);
-	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
-
-    
-	close(file_fd);
-	close(dev_fd);
-
+		while(ioctl(dev_fd, 0x12345679)  < 0 && errno == EAGAIN)
+			; // end sending data, close the connection
+		
+		gettimeofday(&end, NULL);
+		trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
+		n_time += trans_time;
+		nfile_size += file_size;
+		close(file_fd);
+		close(dev_fd);
+		}	
+	printf("Transmission time: %lf ms, File size: %ld bytes\n", n_time, nfile_size / 8);
 	return 0;
 }
 
