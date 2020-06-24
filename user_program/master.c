@@ -88,8 +88,7 @@ int main (int argc, char* argv[])
 						if(BUF_SIZE + offset > file_size)
 							length = file_size%BUF_SIZE;
 						memcpy(dev_addr, file_addr + t, length);
-						while((ioctl(dev_fd, 0x12345678, length)) < 0 && errno == EAGAIN)
-							;
+						while((ioctl(dev_fd, 0x12345678, length)) < 0 && errno == EAGAIN);
 						offset += length;
 						t += length;
 					   }while(offset % PAGE_SIZE != 0 && offset < file_size);
@@ -101,8 +100,7 @@ int main (int argc, char* argv[])
 			break;
 		}
 
-		while(ioctl(dev_fd, 0x12345679)  < 0 && errno == EAGAIN)
-			; // end sending data, close the connection
+		while(ioctl(dev_fd, 0x12345679)  < 0 && errno == EAGAIN); // end sending data, close the connection
 		
 		gettimeofday(&end, NULL);
 		trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
