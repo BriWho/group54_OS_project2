@@ -28,7 +28,7 @@
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
-
+#define MAP_SIZE 40960
 
 #define BUF_SIZE 512
 
@@ -123,7 +123,7 @@ int slave_open(struct inode *inode, struct file *filp)
 
 int slave_mmap(struct file* filp , struct vm_area_struct* vma)
 {
-	remap_pfn_range(vma , vma -> vm_start , virt_to_phys(filp -> private_data) >> PAGE_SHIFT , vma -> vm_end - vma -> vm_start , vma -> vm_page_prot);
+	int ret = remap_pfn_range(vma , vma -> vm_start , virt_to_phys(filp -> private_data) >> PAGE_SHIFT , vma -> vm_end - vma -> vm_start , vma -> vm_page_prot);
 	vma -> vm_ops = &mmap_vm_ops;
 	vma -> vm_flags |= VM_RESERVED;
 	vma -> vm_private_data = filp -> private_data;
@@ -198,7 +198,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			ret = krecv(sockfd_cli , file -> private_data , ioctl_param, 0);
+			ret = krecv(sockfd_cli , file -> private_data , MAP_SIZE, 0);
 			break;
 
 		case slave_IOCTL_EXIT:

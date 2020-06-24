@@ -44,6 +44,7 @@ int main (int argc, char* argv[])
 
 	write(1, "ioctl success\n", 14);
 	for(int i = 0;i < n_file;i++){
+		file_size = 0;
 		if( (dev_fd = open("/dev/slave_device", O_RDWR)) < 0)//should be O_RDWR for PROT_WRITE when mmap()
 		{
 			perror("failed to open /dev/slave_device\n");
@@ -76,25 +77,23 @@ int main (int argc, char* argv[])
 				}while(ret > 0);
 			break;
 			case 'm':
-					dev_addr = mmap(NULL, MAP_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
-					do{
-						while((ret = ioctl(dev_fd, IOCTL_MMAP)) < 0 && errno == EAGAIN);
-						posix_fallocate(file_fd, file_size, ret);
-						len = file_size;
-						len = len-(file_size/PAGE_SIZE);
-						file_addr = mmap(NULL, len + ret, PROT_WRITE, MAP_SHARED, file_fd, file_size/PAGE_SIZE);
-						memcpy(file_addr+len, dev_addr, ret);
-						munmap(file_addr, len+ret);
-						file_size += ret;
-					}while(ret > 0);
-					ftruncate(file_fd, file_size);
-					ioctl(dev_fd, 0, dev_addr);
-					munmap(dev_addr, MAP_SIZE);	
+				dev_addr = mmap(NULL, MAP_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
+				do{
+					while((ret = ioctl(dev_fd, IOCTL_MMAP)) < 0 && errno == EAGAIN);
+					posix_fallocate(file_fd, file_size, ret);
+					len = file_size;
+					len = len-(file_size/PAGE_SIZE)*PAGE_SIZE;
+					file_addr = mmap(NULL, len + ret, PROT_WRITE, MAP_SHARED, file_fd,(file_size/PAGE_SIZE)*PAGE_SIZE);
+					memcpy(file_addr+len, dev_addr, ret);
+					munmap(file_addr, len+ret);
+					file_size += ret;
+				}while(ret > 0);
+				ftruncate(file_fd, file_size);
+				ioctl(dev_fd, 0, dev_addr);
+				munmap(dev_addr, MAP_SIZE);	
 			break;
 		}
-		if(ioctl(dev_fd, 0x12345679) == -1){
-			perror("ioctl client exits error\n");
-		}// end receiving data, close the connection		
+		if(ioctl(dev_fd, 0x12345679) == -1)return 1;// end receiving data, close the connection		
 		gettimeofday(&end, NULL);
 		trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
 		n_time += trans_time;
