@@ -38,22 +38,14 @@ int main (int argc, char* argv[])
 	strcpy(dir, argv[2]);
 	strcpy(method, argv[3]);
 
-
-	if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
-	{
-		perror("failed to open /dev/master_device\n");
-		return 1;
- 	}
 	gettimeofday(&start ,NULL);
-
-
-
-	if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
-	{
-		perror("ioclt server create socket error\n");
-		return 1;
-	}
+	
     	for(int i = 0;i < n_file;i++){
+		if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
+		{
+			perror("failed to open /dev/master_device\n");
+			return 1;
+ 		}		
 		char nfile_name[50];
 		sprintf(nfile_name,"%s/target_file_%d", dir, i+1);
 		if( (file_fd = open(nfile_name, O_RDWR)) < 0 )
@@ -65,6 +57,12 @@ int main (int argc, char* argv[])
 		if( (file_size = get_filesize(nfile_name)) < 0)
 		{
 			perror("failed to get filesize\n");
+			return 1;
+		}
+		
+		if(ioctl(dev_fd, 0x12345677) == -1) //0x12345677 : create socket and accept the connection from the slave
+		{
+			perror("ioclt server create socket error\n");
 			return 1;
 		}
 		//printf("%d\n",file_size);
@@ -90,7 +88,8 @@ int main (int argc, char* argv[])
 						if(BUF_SIZE + offset > file_size)
 							length = file_size%BUF_SIZE;
 						memcpy(dev_addr, file_addr + t, length);
-						ioctl(dev_fd, 0x12345678, length);
+						while((ioctl(dev_fd, 0x12345678, length)) < 0 && errno == EAGAIN)
+							;
 						offset += length;
 						t += length;
 					   }while(offset % PAGE_SIZE != 0 && offset < file_size);
